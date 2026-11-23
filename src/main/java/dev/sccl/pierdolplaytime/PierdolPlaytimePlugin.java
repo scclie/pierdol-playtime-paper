@@ -1,10 +1,13 @@
 package dev.sccl.pierdolplaytime;
 
-import dev.sccl.pierdolauth.api.AuthenticatedPlayerService;
+import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.kyori.adventure.text.Component;
@@ -31,6 +34,52 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         boolean afk;
         Component original;
         Component decorated;
+    }
+
+    private record AuthBridge(Object service, Method authenticatedUserIdMethod,
+                              Method maxCreditBatchSizeMethod, Method creditActiveMinutesMethod) {
+        private static AuthBridge load() {
+            try {
+                var auth = Bukkit.getPluginManager().getPlugin("PierdolAuth");
+                if (auth == null || !auth.isEnabled()) return null;
+                Class<?> api = Class.forName("dev.sccl.pierdolauth.api.AuthenticatedPlayerService",
+                        false, auth.getClass().getClassLoader());
+                Object service = Bukkit.getServicesManager().load(api);
+                if (service == null) return null;
+                return new AuthBridge(service, api.getMethod("authenticatedUserId", Player.class),
+                        api.getMethod("maxCreditBatchSize"),
+                        api.getMethod("creditActiveMinutes", Collection.class));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return null;
+            }
+        }
+
+        private OptionalLong authenticatedUserId(Player player) {
+            try {
+                Object result = authenticatedUserIdMethod.invoke(service, player);
+                return result instanceof OptionalLong userId ? userId : OptionalLong.empty();
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return OptionalLong.empty();
+            }
+        }
+
+        private long maxCreditBatchSize() {
+            try {
+                Object result = maxCreditBatchSizeMethod.invoke(service);
+                return result instanceof Number size ? size.longValue() : 0;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return 0;
+            }
+        }
+
+        private CompletionStage<?> creditActiveMinutes(Collection<Long> userIds) {
+            try {
+                Object result = creditActiveMinutesMethod.invoke(service, userIds);
+                return result instanceof CompletionStage<?> stage ? stage : null;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return null;
+            }
+        }
     }
 
     @Override public void onEnable() {
@@ -70,7 +119,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
 
     private void creditMinute() {
         if (inFlight.get()) return;
-        var service = Bukkit.getServicesManager().load(AuthenticatedPlayerService.class);
+        var service = AuthBridge.load();
         if (service == null) return;
         var userIds = new HashSet<Long>();
         long now = System.nanoTime();
@@ -83,8 +132,12 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         }
         if (userIds.isEmpty() || !inFlight.compareAndSet(false, true)) return;
         try {
-            service.creditActiveMinutes(List.copyOf(userIds))
-                    .whenCompleteAsync((credited, failure) -> inFlight.set(false));
+            var completion = service.creditActiveMinutes(List.copyOf(userIds));
+            if (completion == null) {
+                inFlight.set(false);
+                return;
+            }
+            completion.whenCompleteAsync((credited, failure) -> inFlight.set(false));
         } catch (RuntimeException ignored) {
             inFlight.set(false);
         }

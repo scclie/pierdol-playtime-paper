@@ -14,7 +14,6 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.253-stable")
-    compileOnly(project(":pierdol-auth-paper"))
 }
 
 java {
