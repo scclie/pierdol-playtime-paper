@@ -1,0 +1,156 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pierdol-playtime-paper
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: pierdol-playtime-paper
+      - name: Check out Auth sibling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: scclie/pierdol-auth-paper
+          path: pierdol-auth-paper
+      - name: Set up Java 25
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Validate release tag
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', os.environ['GITHUB_REF_NAME']):
+              sys.exit('Expected vMAJOR.MINOR.PATCH without leading zeros')
+          PY
+      - name: Fetch verified FastLogin compile-only JAR
+        run: |
+          python3 ../pierdol-auth-paper/scripts/fetch-fastlogin-jar.py \
+            --url 'https://api.spiget.org/v2/resources/134322/download?version=636152' \
+            --sri-sha256 'sha256-sxVoz7e4gVCQ2ewDT5z315oue5HPZlAFy7/G7XCEDOs=' \
+            --output "${RUNNER_TEMP}/FastLogin.jar"
+      - name: Build one release JAR
+        env:
+          FASTLOGIN_JAR: ${{ runner.temp }}/FastLogin.jar
+        run: ./gradlew --no-daemon clean :assemble -PreleaseVersion="${GITHUB_REF_NAME#v}"
+      - name: Publish release JAR
+        env:
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+          FORGEJO_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          from urllib.parse import quote
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          token = os.environ['FORGEJO_TOKEN']
+          server = os.environ['FORGEJO_URL'].rstrip('/')
+          repository = os.environ['REPOSITORY']
+          tag = os.environ['GITHUB_REF_NAME']
+          require(token and server and repository and tag, 'Missing release environment')
+          repository_api = server + '/api/v1/repos/' + quote(repository, safe='/')
+          base = repository_api + '/releases'
+          jar = Path('build/libs') / ('pierdol-playtime-paper-' + tag[1:] + '.jar')
+          require(jar.is_file(), 'Missing release JAR')
+          sri_hash = 'sha256-' + base64.b64encode(hashlib.sha256(jar.read_bytes()).digest()).decode('ascii')
+          release_hash_block = '## Nix SRI SHA-256\n\n```nix\nhash = "' + sri_hash + '";\n```'
+
+          def api(method, url, payload=None, attachment=None, missing_ok=False):
+              with tempfile.TemporaryDirectory() as directory:
+                  body = Path(directory) / 'response.json'
+                  command = ['curl', '--silent', '--show-error', '--request', method,
+                             '--header', '@-',
+                             '--output', str(body), '--write-out', '%{http_code}']
+                  if payload is not None:
+                      command += ['--header', 'Content-Type: application/json', '--data', payload]
+                  if attachment is not None:
+                      command += ['--form', 'attachment=@' + str(attachment)]
+                  try:
+                      status = subprocess.check_output(
+                          command + [url], input=f'Authorization: token {token}\n',
+                          text=True, stderr=subprocess.PIPE).strip()
+                  except (subprocess.CalledProcessError, OSError):
+                      raise SystemExit('Release API transport failed') from None
+                  if missing_ok and status == '404':
+                      return None
+                  require(status in ('200', '201'), 'Release API request failed (HTTP ' + status + ')')
+                  return json.loads(body.read_text())
+
+          def validate_release(release):
+              require(isinstance(release, dict), 'Invalid release response')
+              require(release.get('tag_name') == tag, 'Release tag mismatch')
+              require(type(release.get('id')) is int and release['id'] > 0, 'Invalid release ID')
+              return release['id']
+
+          release = api('GET', base + '/tags/' + quote(tag, safe=''), missing_ok=True)
+          if release is None:
+              payload = json.dumps({'tag_name': tag, 'name': tag, 'draft': False, 'body': release_hash_block})
+              release = api('POST', base, payload=payload)
+          release_id = validate_release(release)
+          release_url = base + '/' + str(release_id)
+          release_body = release.get('body', '')
+          require(isinstance(release_body, str), 'Invalid release body')
+          if release_hash_block not in release_body:
+              separator = '\n\n' if release_body else ''
+              release = api('PATCH', release_url, payload=json.dumps({'body': release_body + separator + release_hash_block}))
+              release_id = validate_release(release)
+              release_url = base + '/' + str(release_id)
+
+          def assets():
+              found = {}
+              seen_ids = set()
+              page = 1
+              while True:
+                  batch = api('GET', release_url + '/assets?limit=50&page=' + str(page))
+                  require(isinstance(batch, list), 'Invalid asset listing')
+                  if not batch:
+                      return found
+                  for asset in batch:
+                      require(isinstance(asset, dict), 'Invalid asset response')
+                      name = asset.get('name')
+                      require(name == jar.name, 'Unexpected asset name')
+                      require(name not in found, 'Ambiguous asset name')
+                      asset_id = asset.get('id')
+                      require(type(asset_id) is int and asset_id > 0 and asset_id not in seen_ids,
+                              'Invalid or repeated asset ID')
+                      seen_ids.add(asset_id)
+                      found[name] = asset
+                  page += 1
+
+          def validate_asset(asset):
+              require(isinstance(asset, dict) and asset.get('name') == jar.name,
+                       'Uploaded asset name mismatch')
+              asset_id = asset.get('id')
+              require(type(asset_id) is int and asset_id > 0, 'Invalid asset ID')
+
+          existing = assets()
+          if jar.name not in existing:
+              uploaded = api('POST', release_url + '/assets', attachment=jar)
+              validate_asset(uploaded)
+          PY

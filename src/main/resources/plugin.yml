@@ -1,0 +1,5 @@
+name: PierdolPlaytime
+main: dev.sccl.pierdolplaytime.PierdolPlaytimePlugin
+version: ${version}
+api-version: '26.3'
+depend: [PierdolAuth]
