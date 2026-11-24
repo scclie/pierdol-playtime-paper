@@ -30,3 +30,22 @@ tasks.jar {
     archiveBaseName.set("pierdol-playtime-paper")
     manifest.attributes["Implementation-Version"] = project.version
 }
+
+// Explicitly opt-in, isolated from main and the normal release/assemble artifact.
+val localOfflineDev = sourceSets.create("localOfflineDev")
+configurations[localOfflineDev.compileOnlyConfigurationName].extendsFrom(configurations.compileOnly.get())
+
+tasks.named<ProcessResources>(localOfflineDev.processResourcesTaskName) {
+    filesMatching("plugin.yml") {
+        expand("version" to project.version)
+    }
+}
+
+tasks.register<Jar>("localOfflineDevJar") {
+    group = "build"
+    description = "Build the local-only offline AFK demo (no Auth or playtime crediting)."
+    archiveBaseName.set("pierdol-playtime-paper")
+    archiveClassifier.set("local-offline-dev")
+    from(localOfflineDev.output)
+    manifest.attributes["Implementation-Version"] = project.version
+}

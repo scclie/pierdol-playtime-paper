@@ -1,0 +1,5 @@
+name: PierdolPlaytime
+main: dev.sccl.pierdolplaytime.OfflineDevPlaytimePlugin
+version: ${version}-local-offline-dev
+api-version: '26.3'
+description: 'LOCAL DEVELOPMENT ONLY: offline AFK demo; no Auth or playtime crediting.'

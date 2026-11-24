@@ -111,7 +111,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
             if (!activity.afk && now - activity.lastInput >= AFK_NANOS) {
                 activity.afk = true;
                 activity.original = player.playerListName();
-                activity.decorated = Component.text("⌚").append(activity.original);
+                activity.decorated = Component.text("⌚ ").append(activity.original);
                 player.playerListName(activity.decorated);
             }
         });

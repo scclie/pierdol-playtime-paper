@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 VERSION" >&2
+    exit 2
+fi
+
+exec nix develop -c ./gradlew --no-daemon clean :assemble "-PreleaseVersion=$1"
