@@ -10,7 +10,6 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -32,8 +31,6 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
     private static final class Activity {
         long lastInput = System.nanoTime();
         boolean afk;
-        Component original;
-        Component decorated;
     }
 
     private record AuthBridge(Object service, Method authenticatedUserIdMethod,
@@ -93,16 +90,12 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         Activity activity = players.get(player);
         if (activity == null) return;
         activity.lastInput = System.nanoTime();
-        if (activity.afk) restore(player, activity);
+        activity.afk = false;
     }
 
-    private void restore(Player player, Activity activity) {
-        if (activity.decorated != null && activity.decorated.equals(player.playerListName())) {
-            player.playerListName(activity.original);
-        }
-        activity.afk = false;
-        activity.original = null;
-        activity.decorated = null;
+    public boolean isAfk(Player player) {
+        Activity activity = players.get(player);
+        return activity != null && activity.afk;
     }
 
     private void checkAfk() {
@@ -110,9 +103,6 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         players.forEach((player, activity) -> {
             if (!activity.afk && now - activity.lastInput >= AFK_NANOS) {
                 activity.afk = true;
-                activity.original = player.playerListName();
-                activity.decorated = Component.text("⌚ ").append(activity.original);
-                player.playerListName(activity.decorated);
             }
         });
     }
@@ -145,8 +135,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
 
     @EventHandler public void onJoin(PlayerJoinEvent event) { players.put(event.getPlayer(), new Activity()); }
     @EventHandler public void onQuit(PlayerQuitEvent event) {
-        Activity activity = players.remove(event.getPlayer());
-        if (activity != null && activity.afk) restore(event.getPlayer(), activity);
+        players.remove(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -188,9 +177,6 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
     @Override public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
         HandlerList.unregisterAll((Listener) this);
-        players.forEach((player, activity) -> {
-            if (activity.afk) restore(player, activity);
-        });
         players.clear();
     }
 }
