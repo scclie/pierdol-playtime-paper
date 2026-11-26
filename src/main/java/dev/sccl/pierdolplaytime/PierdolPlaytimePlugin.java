@@ -16,11 +16,15 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.player.*;
+// import org.bukkit.event.block.BlockBreakEvent;
+// import org.bukkit.event.block.BlockPlaceEvent;
+// import org.bukkit.event.inventory.InventoryClickEvent;
+// import org.bukkit.event.inventory.InventoryDragEvent;
+// import org.bukkit.event.player.*;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener {
@@ -145,34 +149,34 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
                 || event.getFrom().getPitch() != event.getTo().getPitch()) input(event.getPlayer());
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onCommand(PlayerCommandPreprocessEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != org.bukkit.event.block.Action.PHYSICAL) input(event.getPlayer());
-    }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onEntityInteract(PlayerInteractEntityEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onEntityInteractAt(PlayerInteractAtEntityEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onBreak(BlockBreakEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlace(BlockPlaceEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onClick(InventoryClickEvent event) {
-        if (event.getWhoClicked() instanceof Player player) input(player);
-    }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onDrag(InventoryDragEvent event) {
-        if (event.getWhoClicked() instanceof Player player) input(player);
-    }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onHeld(PlayerItemHeldEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onDrop(PlayerDropItemEvent event) { input(event.getPlayer()); }
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onSwap(PlayerSwapHandItemsEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onCommand(PlayerCommandPreprocessEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onInteract(PlayerInteractEvent event) {
+    //     if (event.getAction() != org.bukkit.event.block.Action.PHYSICAL) input(event.getPlayer());
+    // }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onEntityInteract(PlayerInteractEntityEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onEntityInteractAt(PlayerInteractAtEntityEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onBreak(BlockBreakEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onPlace(BlockPlaceEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onClick(InventoryClickEvent event) {
+    //     if (event.getWhoClicked() instanceof Player player) input(player);
+    // }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onDrag(InventoryDragEvent event) {
+    //     if (event.getWhoClicked() instanceof Player player) input(player);
+    // }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onHeld(PlayerItemHeldEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onDrop(PlayerDropItemEvent event) { input(event.getPlayer()); }
+    // @EventHandler(priority = EventPriority.MONITOR)
+    // public void onSwap(PlayerSwapHandItemsEvent event) { input(event.getPlayer()); }
 
     @Override public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
