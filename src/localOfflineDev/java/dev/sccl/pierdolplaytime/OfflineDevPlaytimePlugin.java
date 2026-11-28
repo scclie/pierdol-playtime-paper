@@ -1,3 +1,5 @@
+// this shit is for local testing without having to connect to the mine.pirerdol.ing api and all that
+
 package dev.sccl.pierdolplaytime;
 
 import java.util.IdentityHashMap;
@@ -42,6 +44,7 @@ public final class OfflineDevPlaytimePlugin extends JavaPlugin implements Listen
         if (activity == null) return;
         activity.lastInput = System.nanoTime();
         activity.afk = false;
+        player.setSleepingIgnored(false);
     }
 
     public boolean isAfk(Player player) {
@@ -54,11 +57,16 @@ public final class OfflineDevPlaytimePlugin extends JavaPlugin implements Listen
         players.forEach((player, activity) -> {
             if (!activity.afk && now - activity.lastInput >= AFK_NANOS) {
                 activity.afk = true;
+                player.setSleepingIgnored(true);
             }
         });
     }
 
-    @EventHandler public void onJoin(PlayerJoinEvent event) { players.put(event.getPlayer(), new Activity()); }
+    @EventHandler public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        player.setSleepingIgnored(false);
+        players.put(player, new Activity());
+    }
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         players.remove(event.getPlayer());
     }
@@ -100,6 +108,7 @@ public final class OfflineDevPlaytimePlugin extends JavaPlugin implements Listen
     // public void onSwap(PlayerSwapHandItemsEvent event) { input(event.getPlayer()); }
 
     @Override public void onDisable() {
+        for (Player player : Bukkit.getOnlinePlayers()) player.setSleepingIgnored(false);
         Bukkit.getScheduler().cancelTasks(this);
         HandlerList.unregisterAll((Listener) this);
         players.clear();

@@ -95,6 +95,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         if (activity == null) return;
         activity.lastInput = System.nanoTime();
         activity.afk = false;
+        player.setSleepingIgnored(false);
     }
 
     public boolean isAfk(Player player) {
@@ -107,6 +108,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         players.forEach((player, activity) -> {
             if (!activity.afk && now - activity.lastInput >= AFK_NANOS) {
                 activity.afk = true;
+                player.setSleepingIgnored(true);
             }
         });
     }
@@ -137,7 +139,11 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
         }
     }
 
-    @EventHandler public void onJoin(PlayerJoinEvent event) { players.put(event.getPlayer(), new Activity()); }
+    @EventHandler public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        player.setSleepingIgnored(false);
+        players.put(player, new Activity());
+    }
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         players.remove(event.getPlayer());
     }
@@ -179,6 +185,7 @@ public final class PierdolPlaytimePlugin extends JavaPlugin implements Listener 
     // public void onSwap(PlayerSwapHandItemsEvent event) { input(event.getPlayer()); }
 
     @Override public void onDisable() {
+        for (Player player : Bukkit.getOnlinePlayers()) player.setSleepingIgnored(false);
         Bukkit.getScheduler().cancelTasks(this);
         HandlerList.unregisterAll((Listener) this);
         players.clear();
